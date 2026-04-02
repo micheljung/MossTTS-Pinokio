@@ -17,6 +17,7 @@ import functools
 import importlib.util
 import os
 import sys
+import tempfile
 import traceback
 from typing import Optional, Tuple
 
@@ -49,6 +50,9 @@ CODEC_MODEL_PATH = "OpenMOSS-Team/MOSS-Audio-Tokenizer"
 
 # Audio tokenizer produces 12.5 tokens per second of audio
 TOKENS_PER_SECOND = 12.5
+
+# Max reference audio duration to avoid OOM in the audio tokenizer's self-attention
+MAX_REFERENCE_DURATION_SEC = 30.0
 
 # ============================================================================
 # Model Loading
@@ -115,6 +119,31 @@ def _resolve_hf_path(repo_id: str) -> str:
     return repo_id
 
 
+def _truncate_reference_audio(audio_path: str, max_duration: float = MAX_REFERENCE_DURATION_SEC) -> str:
+    """Truncate reference audio to max_duration seconds to prevent OOM in the tokenizer.
+
+    The audio tokenizer's self-attention computes an O(L²) positional matrix;
+    very long reference clips cause out-of-memory errors on consumer GPUs.
+    Returns the original path if the file is already short enough, otherwise
+    writes a truncated copy to a temp file and returns its path.
+    """
+    import librosa
+    import soundfile as sf
+
+    y, sr = librosa.load(audio_path, sr=None, mono=True)
+    max_samples = int(max_duration * sr)
+    if len(y) <= max_samples:
+        return audio_path
+
+    print(
+        f"⚠️  Reference audio is {len(y) / sr:.1f}s — truncating to {max_duration:.0f}s "
+        f"to avoid GPU OOM in the audio tokenizer."
+    )
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    sf.write(tmp.name, y[:max_samples], sr)
+    return tmp.name
+
+
 @functools.lru_cache(maxsize=6)
 def load_model(model_key: str, device_str: str, attn_implementation: str):
     """Load and cache a model."""
@@ -176,6 +205,7 @@ def run_tts_inference(
     attn_implementation: str,
 ) -> Tuple[Optional[Tuple[int, np.ndarray]], str]:
     """Run MOSS-TTS inference."""
+    _ref_tmp = None
     try:
         if not text or not text.strip():
             return None, "❌ Error: Please enter text to synthesize"
@@ -186,7 +216,8 @@ def run_tts_inference(
         # Build message kwargs
         msg_kwargs = {"text": text}
         if reference_audio:
-            msg_kwargs["reference"] = [reference_audio]
+            _ref_tmp = _truncate_reference_audio(reference_audio)
+            msg_kwargs["reference"] = [_ref_tmp]
         if duration_seconds > 0:
             msg_kwargs["tokens"] = max(1, int(duration_seconds * TOKENS_PER_SECOND))
 
@@ -218,11 +249,20 @@ def run_tts_inference(
         if messages and len(messages) > 0:
             audio = messages[0].audio_codes_list[0]
             audio_np = audio.cpu().numpy()
+            if _ref_tmp and _ref_tmp != reference_audio:
+                os.unlink(_ref_tmp)
             return (sample_rate, audio_np), "✅ Generation completed successfully!"
 
+        if _ref_tmp and _ref_tmp != reference_audio:
+            os.unlink(_ref_tmp)
         return None, "❌ Error: No audio generated"
 
     except Exception as e:
+        if _ref_tmp and _ref_tmp != reference_audio:
+            try:
+                os.unlink(_ref_tmp)
+            except OSError:
+                pass
         error_msg = f"❌ Error: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
         print(error_msg)
         return None, error_msg
