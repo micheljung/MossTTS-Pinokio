@@ -98,6 +98,8 @@ def run_tts_inference(
         if audio_np.ndim > 1:
             audio_np = audio_np.reshape(-1)
         audio_np = audio_np.astype(np.float32, copy=False)
+        audio_np = np.clip(audio_np, -1.0, 1.0)
+        audio_i16 = (audio_np * 32767.0).astype(np.int16)
 
         if _ref_tmp and _ref_tmp != reference_audio:
             try:
@@ -112,7 +114,7 @@ def run_tts_inference(
             f"expected_tokens={expected_tokens if expected_tokens is not None else 'off'}, "
             f"temperature={temperature:.2f}, top_p={top_p:.2f}, top_k={top_k}"
         )
-        return (sample_rate, audio_np), status
+        return (sample_rate, audio_i16), status
 
     except Exception as e:
         if _ref_tmp and _ref_tmp != reference_audio:

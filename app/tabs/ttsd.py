@@ -409,6 +409,8 @@ def run_ttsd_inference(
         if audio_np.ndim > 1:
             audio_np = audio_np.reshape(-1)
         audio_np = audio_np.astype(np.float32, copy=False)
+        audio_np = np.clip(audio_np, -1.0, 1.0)
+        audio_i16 = (audio_np * 32767.0).astype(np.int16)
 
         clone_summary = "none" if not cloned_speakers else ",".join(f"S{i}" for i in cloned_speakers)
         elapsed = time.monotonic() - started_at
@@ -419,7 +421,7 @@ def run_ttsd_inference(
             f"max_new_tokens={int(max_new_tokens)}, temperature={float(temperature):.2f}, "
             f"top_p={float(top_p):.2f}, top_k={int(top_k)}"
         )
-        return (sample_rate, audio_np), status
+        return (sample_rate, audio_i16), status
 
     except Exception as e:
         error_msg = f"❌ Error: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"

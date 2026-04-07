@@ -240,7 +240,9 @@ def load_realtime_model(device_str: str, attn_implementation: str):
 
     tokenizer = AutoTokenizer.from_pretrained(local_model_path)
 
-    codec = AutoModel.from_pretrained(local_codec_path, trust_remote_code=True).eval().to(device)
+    codec = AutoModel.from_pretrained(
+        local_codec_path, trust_remote_code=True, torch_dtype=dtype
+    ).eval().to(device)
 
     inferencer = MossTTSRealtimeInference(
         model, tokenizer,

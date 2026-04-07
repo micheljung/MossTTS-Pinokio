@@ -60,8 +60,11 @@ def run_realtime_inference(
             return None, "❌ Error: No audio generated"
 
         audio = torch.cat(wav_chunks, dim=-1)
-        audio_np = audio.squeeze().numpy()
-        return (sample_rate, audio_np), "✅ Realtime generation completed!"
+        audio_np = audio.squeeze().float().cpu().numpy()
+        # int16 avoids Gradio's float32→int16 conversion warning; clip to [-1, 1] first
+        audio_np = np.clip(audio_np, -1.0, 1.0)
+        audio_i16 = (audio_np * 32767.0).astype(np.int16)
+        return (sample_rate, audio_i16), "✅ Realtime generation completed!"
 
     except Exception as e:
         error_msg = f"❌ Error: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"

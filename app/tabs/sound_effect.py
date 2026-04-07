@@ -51,8 +51,10 @@ def run_sound_effect_inference(
 
         messages = processor.decode(outputs)
         if messages and len(messages) > 0:
-            audio_np = messages[0].audio_codes_list[0].cpu().numpy()
-            return (sample_rate, audio_np), "✅ Sound effect generated!"
+            audio_np = messages[0].audio_codes_list[0].cpu().numpy().astype(np.float32)
+            audio_np = np.clip(audio_np, -1.0, 1.0)
+            audio_i16 = (audio_np * 32767.0).astype(np.int16)
+            return (sample_rate, audio_i16), "✅ Sound effect generated!"
 
         return None, "❌ Error: No audio generated"
 
