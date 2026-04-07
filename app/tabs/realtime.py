@@ -7,7 +7,7 @@ import gradio as gr
 import numpy as np
 import torch
 
-from model_loader import load_realtime_model
+from model_loader import download_model_files, load_realtime_model
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +102,7 @@ def build_realtime_tab(args):
                     rt_rep_window = gr.Slider(10, 200, value=50, step=5, label="Repetition Window")
                     rt_max_length = gr.Slider(1000, 10000, value=5000, step=500, label="Max Length")
 
+                rt_download_btn = gr.Button("📥 Download Model", variant="secondary")
                 rt_generate_btn = gr.Button("⚡ Generate (Realtime)", variant="primary", size="lg")
 
             with gr.Column(scale=1):
@@ -121,4 +122,10 @@ def build_realtime_tab(args):
             fn=lambda *x: run_realtime_inference(*x, args.device, args.attn_implementation),
             inputs=[rt_text, rt_reference, rt_temp, rt_top_p, rt_top_k, rt_rep_penalty, rt_rep_window, rt_max_length],
             outputs=[rt_output, rt_status],
+        )
+
+        rt_download_btn.click(
+            fn=lambda: download_model_files("realtime"),
+            inputs=[],
+            outputs=[rt_status],
         )

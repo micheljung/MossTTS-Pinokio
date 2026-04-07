@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from config import MODE_CLONE, MODE_CONTINUE, MODE_CONTINUE_CLONE
-from model_loader import _truncate_reference_audio, load_model
+from model_loader import _truncate_reference_audio, download_model_files, load_model
 from utils import (
     EXAMPLE_ROWS,
     build_tts_conversation,
@@ -121,6 +121,14 @@ def run_tts_inference(
         return None, error_msg
 
 
+def _download_tts_model(model_variant: str) -> str:
+    try:
+        model_key = "tts_local" if model_variant == "MOSS-TTS-Local (1.7B)" else "tts"
+        return download_model_files(model_key)
+    except Exception as e:
+        return f"❌ Download failed: {e}"
+
+
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
@@ -177,6 +185,7 @@ def build_tts_tab(args):
                     tts_rep_penalty = gr.Slider(0.8, 2.0, value=1.0, step=0.05, label="Repetition Penalty")
                     tts_max_tokens = gr.Slider(256, 8192, value=4096, step=128, label="Max New Tokens")
 
+                tts_download_btn = gr.Button("📥 Download Model", variant="secondary")
                 tts_generate_btn = gr.Button("🎵 Generate Speech", variant="primary", size="lg")
 
             with gr.Column(scale=2):
@@ -252,4 +261,10 @@ def build_tts_tab(args):
                 tts_temp, tts_top_p, tts_top_k, tts_rep_penalty, tts_max_tokens,
             ],
             outputs=[tts_output, tts_status],
+        )
+
+        tts_download_btn.click(
+            fn=_download_tts_model,
+            inputs=[tts_model_variant],
+            outputs=[tts_status],
         )

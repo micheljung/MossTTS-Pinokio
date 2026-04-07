@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from config import TOKENS_PER_SECOND
-from model_loader import load_model
+from model_loader import download_model_files, load_model
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +91,7 @@ def build_sound_effect_tab(args):
                     se_rep_penalty = gr.Slider(0.8, 2.0, value=1.2, step=0.05, label="Repetition Penalty")
                     se_max_tokens = gr.Slider(256, 8192, value=4096, step=128, label="Max New Tokens")
 
+                se_download_btn = gr.Button("📥 Download Model", variant="secondary")
                 se_generate_btn = gr.Button("🎵 Generate Sound", variant="primary", size="lg")
 
             with gr.Column(scale=1):
@@ -109,4 +110,10 @@ def build_sound_effect_tab(args):
             fn=lambda *x: run_sound_effect_inference(*x, args.device, args.attn_implementation),
             inputs=[se_description, se_duration, se_temp, se_top_p, se_top_k, se_rep_penalty, se_max_tokens],
             outputs=[se_output, se_status],
+        )
+
+        se_download_btn.click(
+            fn=lambda: download_model_files("sound_effect"),
+            inputs=[],
+            outputs=[se_status],
         )

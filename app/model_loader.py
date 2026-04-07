@@ -109,6 +109,40 @@ def _truncate_reference_audio(
 # Cached model loader
 # ---------------------------------------------------------------------------
 
+def download_model_files(model_key: str) -> str:
+    """Download model files to the HuggingFace cache without loading into GPU.
+
+    Returns a status message.
+    """
+    from huggingface_hub import snapshot_download
+
+    repos_to_download = [MODELS[model_key]]
+
+    # Some models also need the codec
+    if model_key in {"ttsd", "realtime"}:
+        repos_to_download.append(CODEC_MODEL_PATH)
+
+    for repo_id in repos_to_download:
+        print(f"Downloading {repo_id}…")
+        max_attempts = 5
+        for attempt in range(1, max_attempts + 1):
+            try:
+                snapshot_download(repo_id)
+                print(f"✓ {repo_id} downloaded")
+                break
+            except Exception as exc:
+                if attempt == max_attempts:
+                    raise
+                wait = attempt * 5
+                print(
+                    f"⚠️  Download interrupted ({exc.__class__.__name__}: {exc}). "
+                    f"Retrying in {wait}s… (attempt {attempt}/{max_attempts})"
+                )
+                time.sleep(wait)
+
+    return f"✅ {MODELS[model_key]} downloaded successfully!"
+
+
 @functools.lru_cache(maxsize=6)
 def load_model(model_key: str, device_str: str, attn_implementation: str):
     """Load and LRU-cache a model + processor pair."""

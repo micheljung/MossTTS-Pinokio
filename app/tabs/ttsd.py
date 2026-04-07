@@ -22,7 +22,7 @@ import numpy as np
 import soundfile as sf
 import torch
 
-from model_loader import load_model
+from model_loader import download_model_files, load_model
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -498,6 +498,7 @@ def build_ttsd_tab(args):
                     repetition_penalty = gr.Slider(0.8, 2.0, value=1.1, step=0.05, label="Repetition Penalty")
                     max_new_tokens = gr.Slider(256, 8192, value=2000, step=128, label="Max New Tokens")
 
+                ttsd_download_btn = gr.Button("📥 Download Model (~17GB)", variant="secondary")
                 ttsd_generate_btn = gr.Button("🎭 Generate Dialogue", variant="primary", size="lg")
 
             with gr.Column(scale=2):
@@ -545,4 +546,10 @@ def build_ttsd_tab(args):
                 temperature, top_p, top_k, repetition_penalty, max_new_tokens,
             ],
             outputs=[ttsd_output, ttsd_status],
+        )
+
+        ttsd_download_btn.click(
+            fn=lambda: download_model_files("ttsd"),
+            inputs=[],
+            outputs=[ttsd_status],
         )

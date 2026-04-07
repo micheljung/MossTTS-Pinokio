@@ -7,7 +7,7 @@ import gradio as gr
 import numpy as np
 import torch
 
-from model_loader import load_model
+from model_loader import download_model_files, load_model
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +91,7 @@ def build_voice_gen_tab(args):
                     vg_rep_penalty = gr.Slider(0.8, 2.0, value=1.1, step=0.05, label="Repetition Penalty")
                     vg_max_tokens = gr.Slider(256, 8192, value=4096, step=128, label="Max New Tokens")
 
+                vg_download_btn = gr.Button("📥 Download Model", variant="secondary")
                 vg_generate_btn = gr.Button("✨ Generate Voice", variant="primary", size="lg")
 
             with gr.Column(scale=1):
@@ -108,4 +109,10 @@ def build_voice_gen_tab(args):
             fn=lambda *x: run_voice_gen_inference(*x, args.device, args.attn_implementation),
             inputs=[vg_instruction, vg_text, vg_temp, vg_top_p, vg_top_k, vg_rep_penalty, vg_max_tokens],
             outputs=[vg_output, vg_status],
+        )
+
+        vg_download_btn.click(
+            fn=lambda: download_model_files("voice_gen"),
+            inputs=[],
+            outputs=[vg_status],
         )
