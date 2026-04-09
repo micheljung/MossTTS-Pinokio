@@ -9,12 +9,15 @@ from typing import Optional, Tuple
 try:
     import spaces
 except ImportError:
+
     class _SpacesFallback:
         @staticmethod
         def GPU(*_args, **_kwargs):
             def _decorator(func):
                 return func
+
             return _decorator
+
     spaces = _SpacesFallback()
 
 import gradio as gr
@@ -31,12 +34,10 @@ from model_loader import download_model_files_for_keys, load_model
 MIN_SPEAKERS = 1
 MAX_SPEAKERS = 5
 
-_ASSET_DIR = Path(__file__).resolve().parent.parent / "asset"
+_ASSET_DIR = Path(__file__).resolve().parent.parent / "MOSS-TTS" / "assets" / "audio"
 PRESET_REF_AUDIO_S1 = str(_ASSET_DIR / "reference_02_s1.wav")
 PRESET_REF_AUDIO_S2 = str(_ASSET_DIR / "reference_02_s2.wav")
-PRESET_PROMPT_TEXT_S1 = (
-    "[S1] In short, we embarked on a mission to make America great again for all Americans."
-)
+PRESET_PROMPT_TEXT_S1 = "[S1] In short, we embarked on a mission to make America great again for all Americans."
 PRESET_PROMPT_TEXT_S2 = (
     "[S2] NVIDIA reinvented computing for the first time after 60 years. In fact, Erwin at IBM knows quite "
     "well that the computer has largely been the same since the 60s."
@@ -96,6 +97,7 @@ PRESET_TABLE_ROWS, PRESET_TABLE_ROW_TO_PRESET = _build_preset_table_rows()
 # Text normalisation
 # ---------------------------------------------------------------------------
 
+
 def normalize_text(text: str) -> str:
     text = re.sub(r"\[(\d+)\]", r"[S\1]", text)
     remove_chars = '【】《》（）『』「」\u201c\u201d\u2018\u2019"-_\u201c\u201d\uff5e~\u2018\u2019\u2018'
@@ -115,11 +117,17 @@ def normalize_text(text: str) -> str:
         content = content.replace("——", "，").replace("……", "，").replace("...", "，")
         content = content.replace("⸺", "，").replace("―", "，").replace("—", "，")
         content = content.replace("…", "，")
-        content = content.translate(str.maketrans({"；": "，", ";": ",", "：": "，", ":": ",", "、": "，"}))
+        content = content.translate(
+            str.maketrans({"；": "，", ";": ",", "：": "，", ":": ",", "、": "，"})
+        )
         content = content.strip()
         content = re.sub(r"([，。？！,.?!])[，。？！,.?!]+", r"\1", content)
         if len(content) > 1:
-            last_ch = "。" if content[-1] == "，" else ("." if content[-1] == "," else content[-1])
+            last_ch = (
+                "。"
+                if content[-1] == "，"
+                else ("." if content[-1] == "," else content[-1])
+            )
             content = content[:-1].replace("。", "，") + last_ch
 
         processed_parts.append({"tag": tag, "content": content})
@@ -144,6 +152,7 @@ def normalize_text(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Audio helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_audio(audio_path: str) -> Tuple[torch.Tensor, int]:
     path = Path(audio_path).expanduser()
@@ -171,6 +180,7 @@ def _resample_wav(wav: torch.Tensor, orig_sr: int, target_sr: int) -> torch.Tens
 # ---------------------------------------------------------------------------
 # Dialogue / conversation helpers
 # ---------------------------------------------------------------------------
+
 
 def _validate_dialogue_text(dialogue_text: str, speaker_count: int) -> str:
     text = (dialogue_text or "").strip()
@@ -233,7 +243,9 @@ def _encode_reference_audio_codes(
     speaker_count: int,
     sample_rate: int,
 ) -> list:
-    encoded_list = processor.encode_audios_from_wav(clone_wavs, sampling_rate=sample_rate)
+    encoded_list = processor.encode_audios_from_wav(
+        clone_wavs, sampling_rate=sample_rate
+    )
     reference_audio_codes: list = [None] * speaker_count
     for speaker_id, audio_codes in zip(cloned_speakers, encoded_list):
         reference_audio_codes[speaker_id - 1] = audio_codes
@@ -247,12 +259,21 @@ def _build_conversation(
     processor,
 ):
     if prompt_audio is None:
-        return [[processor.build_user_message(text=dialogue_text)]], "generation", "Generation"
+        return (
+            [[processor.build_user_message(text=dialogue_text)]],
+            "generation",
+            "Generation",
+        )
     user_message = processor.build_user_message(
         text=dialogue_text, reference=reference_audio_codes
     )
     return (
-        [[user_message, processor.build_assistant_message(audio_codes_list=[prompt_audio])]],
+        [
+            [
+                user_message,
+                processor.build_assistant_message(audio_codes_list=[prompt_audio]),
+            ]
+        ],
         "continuation",
         "voice_clone_and_continuation",
     )
@@ -261,6 +282,7 @@ def _build_conversation(
 # ---------------------------------------------------------------------------
 # Gradio event helpers
 # ---------------------------------------------------------------------------
+
 
 def update_speaker_panels(speaker_count: int):
     count = max(MIN_SPEAKERS, min(MAX_SPEAKERS, int(speaker_count)))
@@ -271,7 +293,9 @@ def apply_preset_selection(evt: gr.SelectData):
     empty = (gr.update(),) * (6 + MAX_SPEAKERS)
     if evt is None or evt.index is None:
         return empty
-    row_idx = int(evt.index[0]) if isinstance(evt.index, (tuple, list)) else int(evt.index)
+    row_idx = (
+        int(evt.index[0]) if isinstance(evt.index, (tuple, list)) else int(evt.index)
+    )
     if row_idx < 0 or row_idx >= len(PRESET_TABLE_ROW_TO_PRESET):
         return empty
     preset_idx = PRESET_TABLE_ROW_TO_PRESET[row_idx]
@@ -294,6 +318,7 @@ def apply_preset_selection(evt: gr.SelectData):
 # Inference
 # ---------------------------------------------------------------------------
 
+
 @spaces.GPU(duration=180)
 def run_ttsd_inference(
     speaker_count: int,
@@ -303,15 +328,23 @@ def run_ttsd_inference(
 ) -> Tuple[Optional[Tuple[int, np.ndarray]], str]:
     speaker_count = max(MIN_SPEAKERS, min(MAX_SPEAKERS, int(speaker_count)))
     reference_audio_values = all_inputs[:MAX_SPEAKERS]
-    prompt_text_values = all_inputs[MAX_SPEAKERS: 2 * MAX_SPEAKERS]
+    prompt_text_values = all_inputs[MAX_SPEAKERS : 2 * MAX_SPEAKERS]
     dialogue_text = all_inputs[2 * MAX_SPEAKERS]
-    text_normalize, sample_rate_normalize, temperature, top_p, top_k, repetition_penalty, max_new_tokens = (
-        all_inputs[2 * MAX_SPEAKERS + 1:]
-    )
+    (
+        text_normalize,
+        sample_rate_normalize,
+        temperature,
+        top_p,
+        top_k,
+        repetition_penalty,
+        max_new_tokens,
+    ) = all_inputs[2 * MAX_SPEAKERS + 1 :]
 
     started_at = time.monotonic()
     try:
-        model, processor, dev, sample_rate = load_model("ttsd", device, attn_implementation)
+        model, processor, dev, sample_rate = load_model(
+            "ttsd", device, attn_implementation
+        )
 
         text_normalize = bool(text_normalize)
         sample_rate_normalize = bool(sample_rate_normalize)
@@ -319,7 +352,9 @@ def run_ttsd_inference(
         normalized_dialogue = str(dialogue_text or "").strip()
         if text_normalize:
             normalized_dialogue = normalize_text(normalized_dialogue)
-        normalized_dialogue = _validate_dialogue_text(normalized_dialogue, speaker_count)
+        normalized_dialogue = _validate_dialogue_text(
+            normalized_dialogue, speaker_count
+        )
 
         cloned_speakers: list = []
         loaded_clone_wavs: list = []
@@ -337,7 +372,9 @@ def run_ttsd_inference(
                 speaker_id = idx + 1
                 cloned_speakers.append(speaker_id)
                 loaded_clone_wavs.append(_load_audio(str(ref_audio)))
-                prompt_text_map[speaker_id] = _normalize_prompt_text(prompt_text, speaker_id)
+                prompt_text_map[speaker_id] = _normalize_prompt_text(
+                    prompt_text, speaker_id
+                )
 
         prompt_audio: Optional[torch.Tensor] = None
         reference_audio_codes: list = []
@@ -351,9 +388,15 @@ def run_ttsd_inference(
             )
             if text_normalize:
                 conversation_text = normalize_text(conversation_text)
-            conversation_text = _validate_dialogue_text(conversation_text, speaker_count)
+            conversation_text = _validate_dialogue_text(
+                conversation_text, speaker_count
+            )
 
-            min_sr = min(sr for _, sr in loaded_clone_wavs) if sample_rate_normalize else None
+            min_sr = (
+                min(sr for _, sr in loaded_clone_wavs)
+                if sample_rate_normalize
+                else None
+            )
             clone_wavs: list = []
             for wav, orig_sr in loaded_clone_wavs:
                 current_sr = int(orig_sr)
@@ -412,7 +455,11 @@ def run_ttsd_inference(
         audio_np = np.clip(audio_np, -1.0, 1.0)
         audio_i16 = (audio_np * 32767.0).astype(np.int16)
 
-        clone_summary = "none" if not cloned_speakers else ",".join(f"S{i}" for i in cloned_speakers)
+        clone_summary = (
+            "none"
+            if not cloned_speakers
+            else ",".join(f"S{i}" for i in cloned_speakers)
+        )
         elapsed = time.monotonic() - started_at
         status = (
             f"✅ Done | mode={mode_name} | speakers={speaker_count} | cloned={clone_summary} | "
@@ -441,10 +488,13 @@ def _download_ttsd_models() -> str:
 # UI
 # ---------------------------------------------------------------------------
 
+
 def build_ttsd_tab(args):
     with gr.Column():
         gr.Markdown("### 💬 MOSS-TTSD - Multi-Speaker Dialogue Generation")
-        gr.Markdown("Multi-speaker dialogue synthesis with optional per-speaker voice cloning.")
+        gr.Markdown(
+            "Multi-speaker dialogue synthesis with optional per-speaker voice cloning."
+        )
 
         speaker_panels: list = []
         speaker_refs: list = []
@@ -453,7 +503,10 @@ def build_ttsd_tab(args):
         with gr.Row(equal_height=False):
             with gr.Column(scale=3):
                 speaker_count = gr.Slider(
-                    minimum=MIN_SPEAKERS, maximum=MAX_SPEAKERS, step=1, value=2,
+                    minimum=MIN_SPEAKERS,
+                    maximum=MAX_SPEAKERS,
+                    step=1,
+                    value=2,
                     label="Speaker Count",
                     info="Minimum 1, maximum 5.",
                 )
@@ -501,15 +554,27 @@ def build_ttsd_tab(args):
                         "(recommended when using 2+ speakers with different sample rates)."
                     )
                     text_normalize = gr.Checkbox(value=True, label="text_normalize")
-                    sample_rate_normalize = gr.Checkbox(value=False, label="sample_rate_normalize")
-                    temperature = gr.Slider(0.1, 3.0, value=1.1, step=0.05, label="Temperature")
+                    sample_rate_normalize = gr.Checkbox(
+                        value=False, label="sample_rate_normalize"
+                    )
+                    temperature = gr.Slider(
+                        0.1, 3.0, value=1.1, step=0.05, label="Temperature"
+                    )
                     top_p = gr.Slider(0.1, 1.0, value=0.9, step=0.01, label="Top P")
                     top_k = gr.Slider(1, 200, value=50, step=1, label="Top K")
-                    repetition_penalty = gr.Slider(0.8, 2.0, value=1.1, step=0.05, label="Repetition Penalty")
-                    max_new_tokens = gr.Slider(256, 8192, value=2000, step=128, label="Max New Tokens")
+                    repetition_penalty = gr.Slider(
+                        0.8, 2.0, value=1.1, step=0.05, label="Repetition Penalty"
+                    )
+                    max_new_tokens = gr.Slider(
+                        256, 8192, value=2000, step=128, label="Max New Tokens"
+                    )
 
-                ttsd_download_btn = gr.Button("📥 Download Model (~17GB)", variant="secondary")
-                ttsd_generate_btn = gr.Button("🎭 Generate Dialogue", variant="primary", size="lg")
+                ttsd_download_btn = gr.Button(
+                    "📥 Download Model (~17GB)", variant="secondary"
+                )
+                ttsd_generate_btn = gr.Button(
+                    "🎭 Generate Dialogue", variant="primary", size="lg"
+                )
 
             with gr.Column(scale=2):
                 ttsd_output = gr.Audio(label="Generated Dialogue", type="numpy")
@@ -535,8 +600,10 @@ def build_ttsd_tab(args):
             fn=apply_preset_selection,
             outputs=[
                 speaker_count,
-                speaker_refs[0], speaker_prompts[0],
-                speaker_refs[1], speaker_prompts[1],
+                speaker_refs[0],
+                speaker_prompts[0],
+                speaker_refs[1],
+                speaker_prompts[1],
                 dialogue_text,
                 *speaker_panels,
             ],
@@ -553,7 +620,11 @@ def build_ttsd_tab(args):
                 dialogue_text,
                 text_normalize,
                 sample_rate_normalize,
-                temperature, top_p, top_k, repetition_penalty, max_new_tokens,
+                temperature,
+                top_p,
+                top_k,
+                repetition_penalty,
+                max_new_tokens,
             ],
             outputs=[ttsd_output, ttsd_status],
         )
